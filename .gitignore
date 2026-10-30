@@ -1,0 +1,12 @@
+# Compiled & temporary files
+*.tmp
+*.log
+err.txt
+test_results.txt
+tests/test_results.txt
+
+# Editor and OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini

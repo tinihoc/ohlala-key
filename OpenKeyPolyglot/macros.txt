@@ -1,0 +1,18 @@
+; ==============================================================================
+; OhlalaKey / OpenKey Polyglot - Macro Definitions
+; Format: trigger=replacement or trigger<TAB>replacement
+; Comments start with ';' or '#'
+; ==============================================================================
+vn=Việt Nam
+hn=Hà Nội
+hcm=Hồ Chí Minh
+dc=được
+đc=được
+kh=không
+ko=không
+nt=nhắn tin
+ng=người
+vs=với
+bt=bình thường
+ok=OhlalaKey
+duongws=đường

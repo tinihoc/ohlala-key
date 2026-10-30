@@ -17,8 +17,9 @@ A_IconTip := "OpenKey Polyglot"
 #Include lib\InputHookManager.ahk
 
 ; Global Application State
-global ConfigPath := A_ScriptDir . "\config.ini"
-global MacroPath := A_ScriptDir . "\macros.txt"
+global ScriptFolder := FileExist(A_ScriptDir . "\OpenKeyPolyglot") ? (A_ScriptDir . "\OpenKeyPolyglot") : A_ScriptDir
+global ConfigPath := ScriptFolder . "\config.ini"
+global MacroPath := ScriptFolder . "\macros.txt"
 global StartupShortcutPath := A_Startup . "\OpenKeyPolyglot.lnk"
 
 ; Settings variables

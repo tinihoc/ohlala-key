@@ -20,9 +20,13 @@ class SimulatedIME {
     vietnamese := unset
     macroMgr := unset
     screen := ""
+    maxBsInSingleEmit := 0
+    totalBsEmitted := 0
 
     __New(method := "Telex", modernTone := true, autoRestore := true, polyglotEnabled := true) {
         this.screen := ""
+        this.maxBsInSingleEmit := 0
+        this.totalBsEmitted := 0
         this.wordBuf := WordBuffer(ObjBindMethod(this, "OnEmit"))
         this.polyglot := PolyglotEngine(method, polyglotEnabled)
         this.vietnamese := VietnameseEngine(method, modernTone, autoRestore)
@@ -30,6 +34,10 @@ class SimulatedIME {
     }
 
     OnEmit(bsCount, text) {
+        if (bsCount > this.maxBsInSingleEmit)
+            this.maxBsInSingleEmit := bsCount
+        this.totalBsEmitted += bsCount
+
         if (bsCount > 0) {
             if (StrLen(this.screen) >= bsCount) {
                 this.screen := SubStr(this.screen, 1, StrLen(this.screen) - bsCount)
@@ -77,7 +85,7 @@ class SimulatedIME {
         }
 
         ; 6. Normal key
-        isUpper := (char == StrUpper(char) && char != StrLower(char))
+        isUpper := (char == StrUpper(char) && char !== StrLower(char))
         this.wordBuf.PushChar(char, char, isUpper)
     }
 
@@ -116,43 +124,82 @@ AssertTest(testName, inputSeq, expectedOutput, method := "Telex", modernTone := 
         failures.Push(msg)
         FileAppend(msg . "`n", OutFile)
     }
+    return ime
 }
 
 FileAppend("=== RUNNING OHLALAKEY IME TEST SUITE ===`n", OutFile)
 
-; Vietnamese Telex Tests
-AssertTest("Vietnamese Telex: duongws", "duongws", "đường", "Telex")
-AssertTest("Vietnamese Telex: hoas (modern)", "hoas", "hóa", "Telex", true)
-AssertTest("Vietnamese Telex: hoas (classic)", "hoas", "hoá", "Telex", false)
+; 1. Modern vs Classic Tone Placement (Issue 4 alignment)
+; Modern: nucleus 2nd vowel (hoá, thuý). Classic: 1st vowel (hóa, thúy).
+AssertTest("Vietnamese Telex: hoas (modern)", "hoas", "hoá", "Telex", true)
+AssertTest("Vietnamese Telex: hoas (classic)", "hoas", "hóa", "Telex", false)
+AssertTest("Vietnamese VNI: hoa1 (modern)", "hoa1", "hoá", "VNI", true)
+AssertTest("Vietnamese VNI: hoa1 (classic)", "hoa1", "hóa", "VNI", false)
+AssertTest("Vietnamese Telex: toans", "toans", "toán", "Telex", true)
+AssertTest("Vietnamese Telex: tieengs", "tieengs", "tiếng", "Telex", true)
+
+; 2. Initial Consonant Isolation (Issue 2: no forced d -> đ hack)
+AssertTest("Consonant Isolation: duongw -> dương", "duongw", "dương", "Telex")
+AssertTest("Consonant Isolation: dduongwf -> đường", "dduongwf", "đường", "Telex")
+AssertTest("Consonant Isolation: dduongws -> đướng", "dduongws", "đướng", "Telex")
+AssertTest("Consonant Isolation: du7o7ng2 -> dường", "du7o7ng2", "dường", "VNI")
+AssertTest("Consonant Isolation: d9u7o7ng2 -> đường", "d9u7o7ng2", "đường", "VNI")
 AssertTest("Vietnamese Telex: dd", "dd", "đ", "Telex")
 AssertTest("Vietnamese Telex: ddd (undo)", "ddd", "dd", "Telex")
-AssertTest("Vietnamese Telex: toans", "toans", "toán", "Telex")
-AssertTest("Vietnamese Telex: tieengs", "tieengs", "tiếng", "Telex")
-
-; Vietnamese VNI Tests
-AssertTest("Vietnamese VNI: du7o7ng2", "du7o7ng2", "đường", "VNI")
 AssertTest("Vietnamese VNI: d9", "d9", "đ", "VNI")
-AssertTest("Vietnamese VNI: hoa1 (modern)", "hoa1", "hóa", "VNI", true)
-AssertTest("Vietnamese VNI: hoa1 (classic)", "hoa1", "hoá", "VNI", false)
+AssertTest("Vietnamese VNI: d99 (undo)", "d99", "d9", "VNI")
 
-; French Tests
+; 3. Telex Tone Toggle & Token Synchronization (Issue 1)
+totalTests++
+imeToggle := SimulatedIME("Telex", true, true, true)
+imeToggle.TypeSequence("toanss")
+if (imeToggle.screen == "toans" && imeToggle.wordBuf.tokens.Length == 5) {
+    passedTests++
+    FileAppend("[PASS] Telex Tone Toggle: toans + s -> toans (tokens synced: 5)`n", OutFile)
+} else {
+    failedTests++
+    msg := "[FAIL] Telex Tone Toggle: screen='" . imeToggle.screen . "', tokens.Length=" . imeToggle.wordBuf.tokens.Length . " (expected 'toans' and 5)"
+    failures.Push(msg)
+    FileAppend(msg . "`n", OutFile)
+}
+
+; 4. Case Preservation & Extended Foreign Grammar
+AssertTest("Case Preservation: Noel -> Noël", "Noel", "Noël", "Telex")
+AssertTest("Case Preservation: NOEL -> NOËL", "NOEL", "NOËL", "Telex")
 AssertTest("French: coeur -> cœur", "coeur", "cœur", "Telex")
+AssertTest("French: COEUR -> CŒUR", "COEUR", "CŒUR", "Telex")
 AssertTest("French: cca -> ça", "cca", "ça", "Telex")
 AssertTest("French: nailve -> naïve", "nailve", "naïve", "Telex")
 AssertTest("French: nalive -> naïve", "nalive", "naïve", "Telex")
-AssertTest("French: Noel -> Noël", "Noel", "Noël", "Telex")
+AssertTest("French Grave: ouf -> où", "ouf", "où", "Telex")
+AssertTest("French Grave Continuity: oufs -> oùs", "oufs", "oùs", "Telex")
 AssertTest("French Guillemets: ''bonjour''", "''bonjour''", "«" . Chr(0x00A0) . "bonjour" . Chr(0x00A0) . "»", "Telex")
 
-; Spanish Tests
+; 5. Spanish Grammar
 AssertTest("Spanish: espannol -> español", "espannol", "español", "Telex")
+AssertTest("Spanish: ESPANNOL -> ESPAÑOL", "ESPANNOL", "ESPAÑOL", "Telex")
 AssertTest("Spanish Inverted Excl: !!Hola!", "!!Hola!", "¡Hola!", "Telex")
 AssertTest("Spanish Inverted Ques Reversion: ???", "???", "???", "Telex")
 
-; English Rollback
+; 6. Word Boundary Backspacing Underflow Protection (Issue 3)
+totalTests++
+imeUnderflow := SimulatedIME("Telex", true, true, true)
+imeUnderflow.TypeSequence("w")
+if (imeUnderflow.screen == "ư" && imeUnderflow.maxBsInSingleEmit <= 1) {
+    passedTests++
+    FileAppend("[PASS] Word Boundary Backspacing: standalone 'w' at boundary emits <= 1 BS`n", OutFile)
+} else {
+    failedTests++
+    msg := "[FAIL] Word Boundary Backspacing: screen='" . imeUnderflow.screen . "', maxBs=" . imeUnderflow.maxBsInSingleEmit . " (expected 'ư' and maxBs <= 1)"
+    failures.Push(msg)
+    FileAppend(msg . "`n", OutFile)
+}
+
+; 7. English Rollback & Auto-Restore
 AssertTest("English Rollback: oll -> oll", "oll", "oll", "Telex")
 AssertTest("English Rollback: oill -> oill", "oill", "oill", "Telex")
 
-; Macro Expansion Tests
+; 8. Macro Expansion Tests
 AssertTest("Macro: vn + Space", "vn ", "Việt Nam ", "Telex")
 AssertTest("Macro: ok + Space", "ok ", "OhlalaKey ", "Telex")
 
@@ -169,4 +216,3 @@ if (failedTests > 0) {
     FileAppend("ALL TESTS PASSED SUCCESSFULLY!`n", OutFile)
     ExitApp(0)
 }
-

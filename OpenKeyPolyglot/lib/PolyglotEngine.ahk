@@ -45,7 +45,7 @@ class PolyglotEngine {
             if (this.punctState == 1) {
                 ; Second '!' -> backspace '!!' and emit '¡'
                 this.punctState := 2
-                wordBuf.Replace(2, "¡", [CharToken("¡", "!", false, 0, 0, true)])
+                wordBuf.Replace(2, "¡", [CharToken("¡", "!", false, 0, 0, true, true)])
                 return true
             } else if (this.punctState == 2) {
                 ; Third '!' after '¡' -> backspace '¡!' and emit '!!!'
@@ -69,7 +69,7 @@ class PolyglotEngine {
             if (this.punctState == 4) {
                 ; Second '?' -> backspace '??' and emit '¿'
                 this.punctState := 5
-                wordBuf.Replace(2, "¿", [CharToken("¿", "?", false, 0, 0, true)])
+                wordBuf.Replace(2, "¿", [CharToken("¿", "?", false, 0, 0, true, true)])
                 return true
             } else if (this.punctState == 5) {
                 ; Third '?' after '¿' -> backspace '¿?' and emit '???'
@@ -97,13 +97,13 @@ class PolyglotEngine {
                     this.isGuillemetOpen := true
                     this.punctState := 8
                     replacement := "«" . nbsp
-                    toks := [CharToken("«", "'", false, 0, 0, true), CharToken(nbsp, "'", false, 0, 0, true)]
+                    toks := [CharToken("«", "'", false, 0, 0, true, true), CharToken(nbsp, "'", false, 0, 0, true, true)]
                     wordBuf.Replace(2, replacement, toks)
                 } else {
                     this.isGuillemetOpen := false
                     this.punctState := 9
                     replacement := nbsp . "»"
-                    toks := [CharToken(nbsp, "'", false, 0, 0, true), CharToken("»", "'", false, 0, 0, true)]
+                    toks := [CharToken(nbsp, "'", false, 0, 0, true, true), CharToken("»", "'", false, 0, 0, true, true)]
                     wordBuf.Replace(2, replacement, toks)
                 }
                 return true
@@ -166,25 +166,25 @@ class PolyglotEngine {
         if (lastToken.diacritic == 4) {
             if (lowerLast == "ä" && lowerChar == "i") {
                 ; nalive: nä + i -> naïve
-                isUpper := lastToken.isUpper
-                rep := (isUpper ? "A" : "a") . "ï"
-                toks := [CharToken(SubStr(rep, 1, 1), "a", isUpper), CharToken("ï", "i", false, 0, 4, true)]
+                isUpperWord := (lastToken.isUpper && (char == "I"))
+                rep := isUpperWord ? "AÏ" : (lastToken.isUpper ? "Aï" : "aï")
+                toks := [CharToken(SubStr(rep, 1, 1), "a", lastToken.isUpper), CharToken(SubStr(rep, 2, 1), "i", isUpperWord || (char == "I"), 0, 4, true, true)]
                 wordBuf.Replace(2, rep, toks)
                 return true
             }
             if (lowerLast == "ö" && lowerChar == "a") {
                 ; !!Hola!: Hö + a -> Hola
-                isUpper := lastToken.isUpper
-                rep := (isUpper ? "O" : "o") . "la"
-                toks := [CharToken(SubStr(rep, 1, 1), "o", isUpper), CharToken("l", "l", false), CharToken("a", "a", false)]
+                isUpperWord := (lastToken.isUpper && (char == "A"))
+                rep := isUpperWord ? "OLA" : (lastToken.isUpper ? "Ola" : "ola")
+                toks := [CharToken(SubStr(rep, 1, 1), "o", lastToken.isUpper), CharToken(SubStr(rep, 2, 1), "l", isUpperWord), CharToken(SubStr(rep, 3, 1), "a", isUpperWord || (char == "A"))]
                 wordBuf.Replace(2, rep, toks)
                 return true
             }
             if (lowerLast == "ö" && lowerChar == "e") {
                 ; Noel -> Nöl -> Noël
-                isUpper := lastToken.isUpper
-                rep := (isUpper ? "O" : "o") . "ë"
-                toks := [CharToken(SubStr(rep, 1, 1), "o", isUpper), CharToken("ë", "e", false, 0, 4, true)]
+                isUpperWord := (lastToken.isUpper && (char == "E"))
+                rep := isUpperWord ? "OË" : (lastToken.isUpper ? "Oë" : "oë")
+                toks := [CharToken(SubStr(rep, 1, 1), "o", lastToken.isUpper), CharToken(SubStr(rep, 2, 1), "e", isUpperWord || (char == "E"), 0, 4, true, true)]
                 wordBuf.Replace(2, rep, toks)
                 return true
             }
@@ -194,9 +194,9 @@ class PolyglotEngine {
         if (lowerChar == "c") {
             if (lowerLast == "c" && !lastToken.isSpecial) {
                 ; Transform cc -> ç
-                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char != "c"))
+                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char !== "c"))
                 rep := isUpper ? "Ç" : "ç"
-                tok := CharToken(rep, "c", isUpper, 0, 0, true)
+                tok := CharToken(rep, "c", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "ç" || lastChar == "Ç") {
@@ -212,9 +212,9 @@ class PolyglotEngine {
         ; 2. Eñe: nn -> ñ, NN -> Ñ, Nn -> Ñ
         if (lowerChar == "n") {
             if (lowerLast == "n" && !lastToken.isSpecial) {
-                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char != "n"))
+                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char !== "n"))
                 rep := isUpper ? "Ñ" : "ñ"
-                tok := CharToken(rep, "n", isUpper, 0, 0, true)
+                tok := CharToken(rep, "n", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "ñ" || lastChar == "Ñ") {
@@ -231,9 +231,9 @@ class PolyglotEngine {
         ; OE Ligature: oe -> œ, OE -> Œ, Oe -> Œ
         if (lowerChar == "e") {
             if (lowerLast == "o" && !lastToken.isSpecial) {
-                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char != "e"))
+                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char !== "e"))
                 rep := isUpper ? "Œ" : "œ"
-                tok := CharToken(rep, "oe", isUpper, 0, 0, true)
+                tok := CharToken(rep, "oe", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "œ" || lastChar == "Œ") {
@@ -247,9 +247,9 @@ class PolyglotEngine {
 
             ; AE Ligature: ae -> æ, AE -> Æ, Ae -> Æ
             if (lowerLast == "a" && !lastToken.isSpecial) {
-                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char != "e"))
+                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char !== "e"))
                 rep := isUpper ? "Æ" : "æ"
-                tok := CharToken(rep, "ae", isUpper, 0, 0, true)
+                tok := CharToken(rep, "ae", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "æ" || lastChar == "Æ") {
@@ -264,9 +264,13 @@ class PolyglotEngine {
 
         ; Noel -> Noël transition when 'l' is typed after 'œ'
         if (lowerChar == "l" && (lastChar == "œ" || lastChar == "Œ")) {
-            isUpper := (lastChar == "Œ")
-            rep := (isUpper ? "O" : "o") . "ël"
-            toks := [CharToken(SubStr(rep, 1, 1), "o", isUpper), CharToken("ë", "e", false, 0, 4, true), CharToken("l", "l", false)]
+            isUpperWord := (lastChar == "Œ" && (char == "L" || char == StrUpper(char)))
+            rep := isUpperWord ? "OËL" : (lastChar == "Œ" ? "Oël" : "oël")
+            toks := [
+                CharToken(SubStr(rep, 1, 1), "o", lastChar == "Œ"),
+                CharToken(SubStr(rep, 2, 1), "e", isUpperWord, 0, 4, true, true),
+                CharToken(SubStr(rep, 3, 1), "l", isUpperWord)
+            ]
             wordBuf.Replace(2, rep, toks)
             return true
         }
@@ -274,7 +278,7 @@ class PolyglotEngine {
         ; 4. Extended Circumflexes: ii -> î, uu -> û, yy -> ŷ
         if (lowerChar == "i" || lowerChar == "u" || lowerChar == "y") {
             if (lowerLast == lowerChar && !lastToken.isSpecial && lastToken.diacritic == 0) {
-                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char != lowerChar))
+                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char !== lowerChar))
                 rep := ""
                 if (lowerChar == "i")
                     rep := isUpper ? "Î" : "î"
@@ -284,7 +288,7 @@ class PolyglotEngine {
                     rep := isUpper ? "Ŷ" : "ŷ"
 
                 if (rep != "") {
-                    tok := CharToken(rep, lowerChar, isUpper, 0, 1, true)
+                    tok := CharToken(rep, lowerChar, isUpper, 0, 1, true, true)
                     wordBuf.Replace(2, rep, [tok])
                     return true
                 }
@@ -340,7 +344,7 @@ class PolyglotEngine {
                 isUpper := (lastToken.isUpper || (char == "L"))
                 rep := this.GetTremaVowel(lowerLast, isUpper)
                 if (rep != "") {
-                    tok := CharToken(rep, lowerLast, isUpper, 0, 4, true)
+                    tok := CharToken(rep, lowerLast, isUpper, 0, 4, true, true)
                     wordBuf.Replace(2, rep, [tok])
                     return true
                 }
@@ -351,7 +355,7 @@ class PolyglotEngine {
         if (lowerChar == "f" && lowerLast == "u" && !lastToken.isSpecial && lastToken.diacritic == 0) {
             isUpper := lastToken.isUpper
             rep := isUpper ? "Ù" : "ù"
-            tok := CharToken(rep, "u", isUpper, 2, 0, true)
+            tok := CharToken(rep, "u", isUpper, 2, 0, true, true)
             wordBuf.Replace(2, rep, [tok])
             return true
         } else if (lowerChar == "f" && (lastChar == "ù" || lastChar == "Ù")) {
@@ -379,7 +383,7 @@ class PolyglotEngine {
             if (lowerLast == "c" && !lastToken.isSpecial) {
                 isUpper := lastToken.isUpper
                 rep := isUpper ? "Ç" : "ç"
-                tok := CharToken(rep, "c", isUpper, 0, 0, true)
+                tok := CharToken(rep, "c", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "ç" || lastChar == "Ç") {
@@ -394,7 +398,7 @@ class PolyglotEngine {
             if (lowerLast == "n" && !lastToken.isSpecial) {
                 isUpper := lastToken.isUpper
                 rep := isUpper ? "Ñ" : "ñ"
-                tok := CharToken(rep, "n", isUpper, 0, 0, true)
+                tok := CharToken(rep, "n", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "ñ" || lastChar == "Ñ") {
@@ -412,7 +416,7 @@ class PolyglotEngine {
             if (lowerLast == "o" && !lastToken.isSpecial) {
                 isUpper := lastToken.isUpper
                 rep := isUpper ? "Œ" : "œ"
-                tok := CharToken(rep, "oe", isUpper, 0, 0, true)
+                tok := CharToken(rep, "oe", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "œ" || lastChar == "Œ") {
@@ -429,7 +433,7 @@ class PolyglotEngine {
             if (lowerLast == "a" && !lastToken.isSpecial) {
                 isUpper := lastToken.isUpper
                 rep := isUpper ? "Æ" : "æ"
-                tok := CharToken(rep, "ae", isUpper, 0, 0, true)
+                tok := CharToken(rep, "ae", isUpper, 0, 0, true, true)
                 wordBuf.Replace(2, rep, [tok])
                 return true
             } else if (lastChar == "æ" || lastChar == "Æ") {
@@ -454,7 +458,7 @@ class PolyglotEngine {
                     rep := isUpper ? "Ŷ" : "ŷ"
 
                 if (rep != "") {
-                    tok := CharToken(rep, lowerLast, isUpper, 0, 1, true)
+                    tok := CharToken(rep, lowerLast, isUpper, 0, 1, true, true)
                     wordBuf.Replace(2, rep, [tok])
                     return true
                 }
@@ -491,7 +495,7 @@ class PolyglotEngine {
                 isUpper := lastToken.isUpper
                 rep := this.GetTremaVowel(lowerLast, isUpper)
                 if (rep != "") {
-                    tok := CharToken(rep, lowerLast, isUpper, 0, 4, true)
+                    tok := CharToken(rep, lowerLast, isUpper, 0, 4, true, true)
                     wordBuf.Replace(2, rep, [tok])
                     return true
                 }
@@ -502,7 +506,7 @@ class PolyglotEngine {
         if (char == "2" && lowerLast == "u" && !lastToken.isSpecial && lastToken.diacritic == 0) {
             isUpper := lastToken.isUpper
             rep := isUpper ? "Ù" : "ù"
-            tok := CharToken(rep, "u", isUpper, 2, 0, true)
+            tok := CharToken(rep, "u", isUpper, 2, 0, true, true)
             wordBuf.Replace(2, rep, [tok])
             return true
         } else if (char == "2" && (lastChar == "ù" || lastChar == "Ù")) {

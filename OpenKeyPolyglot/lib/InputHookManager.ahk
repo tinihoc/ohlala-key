@@ -114,7 +114,7 @@ class InputHookManager {
         }
 
         ; 6. Normal character struck -> Push to word buffer
-        isUpper := (char == StrUpper(char) && char != StrLower(char))
+        isUpper := (char == StrUpper(char) && char !== StrLower(char))
         this.wordBuf.PushChar(char, char, isUpper)
     }
 

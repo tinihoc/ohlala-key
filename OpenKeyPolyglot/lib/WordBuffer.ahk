@@ -11,18 +11,20 @@ class CharToken {
     tone := 0          ; 0: None, 1: Sắc, 2: Huyền, 3: Hỏi, 4: Ngã, 5: Nặng
     diacritic := 0     ; 0: None, 1: Circumflex ^, 2: Breve ă, 3: Horn ơ/ư, 4: Tréma ¨
     isSpecial := false ; ç, ñ, œ, æ, ¡, ¿, guillemets
+    isPolyglot := false
 
-    __New(char := "", rawKey := "", isUpper := false, tone := 0, diacritic := 0, isSpecial := false) {
+    __New(char := "", rawKey := "", isUpper := false, tone := 0, diacritic := 0, isSpecial := false, isPolyglot := false) {
         this.char := char
         this.rawKey := (rawKey != "") ? rawKey : char
         this.isUpper := isUpper
         this.tone := tone
         this.diacritic := diacritic
         this.isSpecial := isSpecial
+        this.isPolyglot := isPolyglot
     }
 
     Clone() {
-        return CharToken(this.char, this.rawKey, this.isUpper, this.tone, this.diacritic, this.isSpecial)
+        return CharToken(this.char, this.rawKey, this.isUpper, this.tone, this.diacritic, this.isSpecial, this.isPolyglot)
     }
 }
 
@@ -93,11 +95,15 @@ class WordBuffer {
     ; Calculates exact {Backspace count} needed and emits SendText newString
     Replace(count, newString, newTokens := unset) {
         ; Send backspaces
-        if (count > 0) {
-            this.EmitBackspace(count)
+        ; Capped to prevent underflow: cannot delete more than current word tokens + 1 incoming visible char
+        maxDel := this.tokens.Length + 1
+        actualDel := Min(count, maxDel)
+
+        if (actualDel > 0) {
+            this.EmitBackspace(actualDel)
             ; The newly typed character was rendered on screen but has not yet been pushed
-            ; to this.tokens. Thus, the number of existing tokens to pop is count - 1.
-            tokensToRemove := count - 1
+            ; to this.tokens. Thus, the number of existing tokens to pop is actualDel - 1.
+            tokensToRemove := Max(0, actualDel - 1)
             loop tokensToRemove {
                 if (this.tokens.Length > 0)
                     this.tokens.Pop()
@@ -107,19 +113,39 @@ class WordBuffer {
         ; Send new string
         if (newString != "") {
             this.EmitText(newString)
-            if (IsSet(newTokens) && (newTokens is Array)) {
+            if (IsSet(newTokens) && (newTokens is Array) && newTokens.Length > 0) {
                 for tok in newTokens {
                     this.tokens.Push(tok)
                 }
             } else {
-                ; Create simple tokens for the newly emitted characters
-                loop Parse, newString {
-                    ch := A_LoopField
-                    isUp := (ch == StrUpper(ch) && ch != StrLower(ch))
-                    this.tokens.Push(CharToken(ch, ch, isUp))
+                ; Automatically parse newString and reconstruct valid CharToken objects
+                toks := this.CreateTokensForString(newString)
+                for tok in toks {
+                    this.tokens.Push(tok)
                 }
             }
         }
+    }
+
+    ; Helper to construct synchronized CharToken objects from rendered string
+    CreateTokensForString(str) {
+        toks := []
+        loop Parse, str {
+            ch := A_LoopField
+            isUp := (ch == StrUpper(ch) && ch !== StrLower(ch))
+            if (VietnameseEngine.CharMap.Has(ch)) {
+                info := VietnameseEngine.CharMap[ch]
+                isD := (info.HasProp("isD") && info.isD)
+                toks.Push(CharToken(ch, info.baseChar, info.isUpper, info.tone, info.diacritic, isD, false))
+            } else if (InStr("çÇñÑœŒæÆäÄëËïÏöÖüÜÿŸùÙîÎûÛŷŶ", ch)) {
+                toks.Push(CharToken(ch, ch, isUp, 0, 0, true, true))
+            } else if (InStr("¡¿«»", ch)) {
+                toks.Push(CharToken(ch, ch, isUp, 0, 0, true, true))
+            } else {
+                toks.Push(CharToken(ch, ch, isUp))
+            }
+        }
+        return toks
     }
 
     ; Emit backspaces either via custom emitter or SendInput

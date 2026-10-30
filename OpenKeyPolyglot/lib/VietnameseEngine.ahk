@@ -117,8 +117,12 @@ class VietnameseEngine {
     }
 
     WordHasPolyglot(wordBuf) {
+        for tok in wordBuf.tokens {
+            if (tok.isPolyglot)
+                return true
+        }
         text := wordBuf.GetText()
-        return RegExMatch(text, "[œæçñäëïöüÿ¡¿«»]") > 0
+        return RegExMatch(text, "[œæçñäëïöüÿ¡¿«»îûŷÎÛŶ]") > 0
     }
 
     CheckConsonantAutoRestore(char, wordBuf) {
@@ -130,7 +134,8 @@ class VietnameseEngine {
         if (RegExMatch(lowerRaw, "^(esp|spl|spr|str|scr|br|cl|cr|dr|fl|fr|gl|gr|pl|pr|sc|sk|sl|sm|sn|sp|sw|tw)") > 0) {
             prevRaw := SubStr(raw, 1, StrLen(raw) - 1)
             if (text != prevRaw) {
-                wordBuf.Replace(StrLen(text) + 1, raw)
+                toks := wordBuf.CreateTokensForString(raw)
+                wordBuf.Replace(StrLen(text) + 1, raw, toks)
                 return true
             }
         }
@@ -181,7 +186,7 @@ class VietnameseEngine {
 
             ; Check creation: double vowel
             if (lowerLast == lowerChar && !lastToken.isSpecial && lastToken.diacritic == 0) {
-                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char != lowerChar))
+                isUpper := (lastToken.isUpper || (char == StrUpper(char) && char !== lowerChar))
                 rep := VietnameseEngine.MakeVowel(lowerChar, 1, 0, isUpper)
                 tok := CharToken(rep, lowerChar, isUpper, 0, 1)
                 wordBuf.Replace(2, rep, [tok])
@@ -351,7 +356,8 @@ class VietnameseEngine {
                 uChar := isUp1 ? "U" : "u"
                 oChar := isUp2 ? "O" : "o"
                 newWord := SubStr(text, 1, pos - 1) . uChar . oChar . SubStr(text, pos + 2) . rawChar
-                wordBuf.Replace(len + 1, newWord)
+                toks := wordBuf.CreateTokensForString(newWord)
+                wordBuf.Replace(len + 1, newWord, toks)
                 return true
             }
         }
@@ -359,21 +365,14 @@ class VietnameseEngine {
         ; Search for 'uo' cluster in the word
         pos := RegExMatch(text, "i)[u][o]", &m)
         if (pos > 0) {
-            ; Check if word starts with single 'd' and user typed 'duongws' or similar
             isUp1 := (SubStr(text, pos, 1) == "U")
             isUp2 := (SubStr(text, pos + 1, 1) == "O")
             uHorn := isUp1 ? "Ư" : "ư"
             oHorn := isUp2 ? "Ơ" : "ơ"
 
             newWord := SubStr(text, 1, pos - 1) . uHorn . oHorn . SubStr(text, pos + 2)
-
-            ; If text begins with 'd' or 'D' and word matches 'duong' pattern, facilitate 'đường'
-            if (RegExMatch(text, "i)^d[u][o]ng") > 0) {
-                isDUp := (SubStr(text, 1, 1) == "D")
-                newWord := (isDUp ? "Đ" : "đ") . SubStr(newWord, 2)
-            }
-
-            wordBuf.Replace(len + 1, newWord)
+            toks := wordBuf.CreateTokensForString(newWord)
+            wordBuf.Replace(len + 1, newWord, toks)
             return true
         }
 
@@ -393,8 +392,9 @@ class VietnameseEngine {
         ; Check English Auto-Restore / orthography validity
         if (this.autoRestore && this.IsIllegalOrthography(text)) {
             ; Restore raw sequence unaltered
-            raw := wordBuf.GetRaw() . rawKey
-            wordBuf.Replace(len + 1, raw)
+            raw := wordBuf.GetRaw()
+            toks := wordBuf.CreateTokensForString(raw)
+            wordBuf.Replace(len + 1, raw, toks)
             return true
         }
 
@@ -423,7 +423,8 @@ class VietnameseEngine {
         if (targetTone > 0 && currentWordTone == targetTone) {
             ; Remove tone and append raw key
             cleanWord := this.RemoveAllTones(text) . rawKey
-            wordBuf.Replace(len + 1, cleanWord)
+            toks := wordBuf.CreateTokensForString(cleanWord)
+            wordBuf.Replace(len + 1, cleanWord, toks)
             return true
         }
 
@@ -449,13 +450,8 @@ class VietnameseEngine {
             }
         }
 
-        ; Special test case handler: 'duongws' -> 'đường' / 'du7o7ng2' -> 'đường'
-        if ((StrLower(newWord) == "đướng" || StrLower(newWord) == "dường") && RegExMatch(wordBuf.GetRaw(), "i)^d+u+.*n+g+.*$") > 0) {
-            ; If raw typed sequence had 's' or '2' on 'duong', ensure it produces 'đường' as requested
-            newWord := (SubStr(newWord, 1, 1) == "Đ" || SubStr(newWord, 1, 1) == "D") ? "Đường" : "đường"
-        }
-
-        wordBuf.Replace(len + 1, newWord)
+        toks := wordBuf.CreateTokensForString(newWord)
+        wordBuf.Replace(len + 1, newWord, toks)
         return true
     }
 
@@ -520,9 +516,9 @@ class VietnameseEngine {
             return v2Pos
         } else {
             ; Open syllable without coda:
-            ; Modern rule: tone on 1st vowel of diphthong (hóa, thúy, hòa, hủy)
-            ; Classic rule: tone on 2nd vowel of diphthong (hoá, thuý, hoà, huỷ)
-            return this.modernTone ? v1Pos : v2Pos
+            ; Modern rule (Quy tắc mới): tone on nucleus (2nd vowel of diphthong, e.g., hoá, thuý, hoà, huỷ)
+            ; Classic rule (Quy tắc cũ): tone on 1st vowel of diphthong (hóa, thúy, hòa, hủy)
+            return this.modernTone ? v2Pos : v1Pos
         }
     }
 
@@ -548,7 +544,7 @@ class VietnameseEngine {
         lower := StrLower(word)
 
         ; Allow polyglot foreign tokens
-        if (RegExMatch(lower, "[œæçñäëïöüÿ¡¿«»]") > 0)
+        if (RegExMatch(lower, "[œæçñäëïöüÿ¡¿«»îûŷ]") > 0)
             return false
 
         ; English illegal onset consonant clusters
